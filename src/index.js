@@ -1,5 +1,5 @@
 var container = new Container();
-var interfaceDefinitions = null;
+var _interfaces = null;
 
 module.exports = {
     init: init,
@@ -8,7 +8,7 @@ module.exports = {
 };
 
 function init(interfaceDefs) {
-    interfaceDefinitions = interfaceDefs;
+    _interfaces = interfaceDefs;
 }
 
 function Container() {
@@ -18,43 +18,111 @@ function Container() {
 
 Container.prototype.register = register;
 Container.prototype.resolve = resolve;
+Container.prototype.remove = remove;
+Container.prototype.has = has;
+Container.prototype.replace = replace;
 
-function register(m) {
+function register(interfaceName) {
     var _this = this;
+    interfaceName = getInterfaceName(interfaceName);
+    if (_this.has(interfaceName)) {
+        throw new Error('Module already registered')
+    }
 
     return {
-        as: function(i) {
-            if (!validate(i, m)) {
-                throw new Error('arrfghh! you make bad interface');
+        as: function(moduleInstance) {
+            if (!validate(interfaceName, moduleInstance)) {
+                throw new Error('Module does not match expected interface');
             }
 
-            _this.moduleCache[i] = m;
+            _this.moduleCache[interfaceName] = moduleInstance;
         }
     };
 }
 
-function resolve(i) {
+function replace(interfaceName) {
     var _this = this;
-    return _this.moduleCache[i];
+    interfaceName = getInterfaceName(interfaceName);
+    _this.remove(interfaceName)
+
+    return {
+        as: function(moduleInstance) {
+            if (!validate(interfaceName, moduleInstance)) {
+                throw new Error('Module does not match expected interface');
+            }
+
+            _this.moduleCache[interfaceName] = moduleInstance;
+        }
+    };
 }
 
-function require(iface) {
-    var interfaceName = iface.substr(iface.lastIndexOf('/') + 1);
-
-    // all modules added to container
-    return container.moduleCache[interfaceName];
+function has(interfaceName) {
+    var _this = this;
+    interfaceName = getInterfaceName(interfaceName);
+    var instance = _this.moduleCache[interfaceName];
+    return (typeof instance !== 'undefined');
 }
 
-function validate(iFace, instance) {
-    var interfaceObj = interfaceDefinitions[iFace];
+function remove(interfaceName) {
+    var _this = this;
+    interfaceName = getInterfaceName(interfaceName);
+    delete _this.moduleCache[interfaceName];
+}
+
+function resolve(interfaceName) {
+    var _this = this;
+    interfaceName = getInterfaceName(interfaceName);
+    var instance = _this.moduleCache[interfaceName];
+    if (typeof instance === 'undefined') {
+        throw new Error('unable to locate instance associated with ' + moduleName);
+    }
+
+    return instance;
+}
+
+function require(moduleName) {
+    var _this = this;
+    return _this.resolve(moduleName);
+
+}
+
+function validate(interfaceName, instance) {
+    var interfaceObj = getInterface(interfaceName);
     var interfaceKeys = Object.keys(interfaceObj);
-
     var interfaceValid = true;
+
     interfaceKeys.forEach(function(key) {
         if (typeof instance[key] !== typeof interfaceObj[key]) {
             interfaceValid = false;
         }
     });
-    return interfaceValid;
 
+    return interfaceValid;
+}
+
+function getInterfaceName(interfaceName) {
+    if (typeof interfaceName === 'undefined' || interfaceName === null) {
+        interfaceName = '';
+    }
+
+    interfaceName = interfaceName.trim();
+
+    if (interfaceName.length === 0) {
+        throw new Error('Interface name missing');
+    }
+
+    var slashPos = interfaceName.lastIndexOf('/');
+
+    if (slashPos > 0) {
+        // this is a path to an interface object
+        // extract the interface title from the path
+        interfaceName = interfaceName.substr(slashPos + 1);
+        if (interfaceName.length === 0) {
+            throw  new Error('Unable to determine interface name from ' + moduleName)
+        }
+    }
+}
+
+function getInterface(interfaceName) {
+    return _interfaces[interfaceName];
 }
